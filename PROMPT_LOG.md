@@ -1278,7 +1278,9 @@ python
 return _format_transaction_response(transaction)
 Добавлено преобразование float() для Numeric типов
 
-Задание 7: Тесты — файл conftest.py
+Задание 7: Тесты
+
+7.1. Файл conftest.py
 
 Дата: 2026-05-14
 Цель: Создать общие фикстуры для всех тестов (клиент, БД, тестовый пользователь, токен)
@@ -1386,3 +1388,39 @@ def auth_token(client, test_user):
 @pytest.fixture
 def auth_headers(auth_token):
     return {"Authorization": f"Bearer {auth_token}"}
+
+7.2. Файл test_health.py
+
+Дата: 2026-05-14
+Цель: Создать тесты для healthcheck эндпоинтов
+Инструмент: DeepSeek
+
+Промпт: Создай файл tests/test_health.py для pytest.
+
+Требования:
+1. Тест test_health_endpoint — проверяет GET /health (статус 200, поле status)
+2. Тест test_root_endpoint — проверяет GET / (статус 200, наличие app_name, version)
+3. Используй TestClient из fastapi.testclient.
+
+test_health.py:
+
+import pytest
+from app.main import app
+from fastapi.testclient import TestClient
+
+client = TestClient(app)
+
+
+def test_health_endpoint():
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "healthy"
+    assert "timestamp" in response.json()
+
+
+def test_root_endpoint():
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "app_name" in response.json()
+    assert "version" in response.json()
+    assert "endpoints" in response.json()
