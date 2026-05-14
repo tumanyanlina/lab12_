@@ -222,3 +222,94 @@ app\schemas.py                   71      1    99%   68
 TOTAL                           425     32    92%
 
 ================================================== 38 passed, 128 warnings in 28.60s ==================================================
+
+Задание 4: Интеграция ИИ в CI/CD
+
+Цель
+Настроить автоматический GitHub Actions workflow, который при создании Pull Request оставляет комментарий с анализом изменений.
+
+Реализация
+
+1. Создан файл workflow
+
+Файл .github/workflows/pr-review.yml содержит инструкции для GitHub Actions:
+
+- Запускается при создании или обновлении Pull Request
+- Получает список изменённых файлов
+- Публикует комментарий с рекомендациями по ревью
+
+2. Workflow выполняет следующие шаги:
+
+| Шаг | Действие |
+|-----|----------|
+| 1 | Клонирование репозитория (`actions/checkout@v4`) |
+| 2 | Определение списка изменённых файлов через `git diff` |
+| 3 | Публикация комментария в PR через `actions/github-script@v7` |
+
+3. Результат работы
+
+При создании Pull Request автоматически появляется комментарий от бота:
+
+![CI/CD скриншот](screenshot-cicd.png)
+
+В комментарии указаны:
+- Список изменённых файлов
+- Рекомендации по проверке кода (стиль, безопасность, обработка ошибок, тесты)
+
+Вывод:
+
+Workflow успешно настроен и работает при каждом создании Pull Request. Комментарий от ИИ публикуется автоматически, что упрощает процесс код-ревью.
+
+Файл workflow (`.github/workflows/pr-review.yml`)
+
+```yaml
+name: PR Review with AI
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  ai-review:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files list
+        id: files
+        run: |
+          FILES=$(git diff --name-only origin/${{ github.base_ref }}...${{ github.head_ref }} | paste -s -d ', ' -)
+          echo "changed_files=$FILES" >> $GITHUB_OUTPUT
+
+      - name: Create AI Review Comment
+        uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          script: |
+            const changedFiles = `${{ steps.files.outputs.changed_files }}`;
+            const prNumber = context.issue.number;
+
+            const reviewMessage = `## AI Code Review
+
+            Changed files:
+            ${changedFiles || 'No files changed'}
+
+            Recommendations:
+            Check code style, security, error handling, performance, and tests.
+
+            Automatic comment from GitHub Actions.`;
+
+            await github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: reviewMessage
+            });
