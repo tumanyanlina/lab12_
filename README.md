@@ -171,3 +171,54 @@ lab12/
 После запуска доступна интерактивная документация:
 Swagger UI: http://localhost:8000/docs
 
+Тестирование
+
+Задание 7: Unit-тесты с покрытием 92%
+
+Тесты написаны с использованием pytest и pytest-cov. Покрытие кода составляет 92%, что выше требуемых 90%.
+
+Структура тестов
+
+| Файл | Описание | Количество тестов |
+|------|----------|-------------------|
+| tests/conftest.py | Фикстуры: БД, клиент, тестовый пользователь, токен | - |
+| tests/test_auth.py | Тесты регистрации и аутентификации | 8 |
+| tests/test_health.py | Тесты healthcheck эндпоинтов | 2 |
+| tests/test_stocks.py | Тесты работы с акциями | 4 |
+| tests/test_portfolio.py | Тесты портфеля | 4 |
+| tests/test_transactions.py | Тесты покупки/продажи | 9 |
+| tests/test_crud.py | Прямые тесты бизнес-логики | 11 |
+
+Всего тестов: 38
+
+Запуск тестов
+
+```bash
+# Установить зависимости для тестов
+pip install pytest pytest-cov
+
+# Запустить все тесты с покрытием
+pytest tests/ -v --cov=app --cov-report=term-missing
+
+# Сгенерировать HTML отчёт
+pytest tests/ -v --cov=app --cov-report=html
+
+---------- coverage: platform win32, python 3.13.2-final-0 -----------
+Name                          Stmts   Miss  Cover   Missing
+-----------------------------------------------------------
+app\__init__.py                   0      0   100%
+app\auth.py                      50      6    88%   18, 47, 67-69, 73
+app\crud.py                     108     12    89%   60-61, 66, 83, 113-115, 129, 133, 161-163
+app\database.py                  19      4    79%   22-26
+app\main.py                      39      8    79%   21-37
+app\models.py                    48      0   100%
+app\routers\__init__.py           0      0   100%
+app\routers\auth.py              29      0   100%
+app\routers\portfolio.py         11      0   100%
+app\routers\stocks.py            18      0   100%
+app\routers\transactions.py      32      1    97%   55
+app\schemas.py                   71      1    99%   68
+-----------------------------------------------------------
+TOTAL                           425     32    92%
+
+================================================== 38 passed, 128 warnings in 28.60s ==================================================
