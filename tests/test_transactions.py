@@ -7,7 +7,7 @@ def test_buy_stock_unauthorized(client):
         "type": "BUY",
         "quantity": 10
     })
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 
 def test_buy_stock_success(client, auth_headers, test_stock):

@@ -3,7 +3,7 @@ import pytest
 
 def test_get_stocks_unauthorized(client):
     response = client.get("/stocks/")
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 
 def test_get_stocks_success(client, auth_headers, test_stock):

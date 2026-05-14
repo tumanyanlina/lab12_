@@ -7,6 +7,7 @@ from app.main import app
 from app.models import User, Stock
 from app.auth import get_password_hash
 
+# Тестовая БД (SQLite в памяти)
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 
 engine = create_engine(
@@ -16,8 +17,8 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 
 def override_get_db():
+    db = TestingSessionLocal()
     try:
-        db = TestingSessionLocal()
         yield db
     finally:
         db.close()
@@ -26,17 +27,19 @@ def override_get_db():
 app.dependency_overrides[get_db] = override_get_db
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def db():
     Base.metadata.create_all(bind=engine)
     db = TestingSessionLocal()
     try:
         yield db
     finally:
+        db.rollback()
         db.close()
+        Base.metadata.drop_all(bind=engine)
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def client(db):
     def _get_test_db():
         try:
@@ -48,7 +51,7 @@ def client(db):
     return TestClient(app)
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def test_user(db):
     user = User(
         email="test@example.com",
@@ -62,7 +65,7 @@ def test_user(db):
     return user
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def test_stock(db):
     stock = Stock(
         symbol="TEST",
@@ -75,7 +78,7 @@ def test_stock(db):
     return stock
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def auth_token(client, test_user):
     response = client.post("/auth/login", json={
         "username": "testuser",
@@ -84,6 +87,6 @@ def auth_token(client, test_user):
     return response.json()["access_token"]
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def auth_headers(auth_token):
     return {"Authorization": f"Bearer {auth_token}"}

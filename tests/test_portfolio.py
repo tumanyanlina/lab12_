@@ -3,7 +3,7 @@ import pytest
 
 def test_get_portfolio_unauthorized(client):
     response = client.get("/portfolio/")
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 
 def test_get_portfolio_empty(client, auth_headers):

@@ -29,7 +29,7 @@ def test_purchase_stock_success(db, test_user, test_stock):
     assert transaction.total_amount == 500.00
     
     db.refresh(test_user)
-    assert test_user.balance == initial_balance - 500.00
+    assert float(test_user.balance) == float(initial_balance) - 500.00
 
 
 def test_purchase_stock_insufficient_funds(db, test_user, test_stock):
@@ -59,7 +59,7 @@ def test_sell_stock_success(db, test_user, test_stock):
     assert transaction.total_amount == 300.00
     
     db.refresh(test_user)
-    assert test_user.balance == initial_balance + 300.00
+    assert float(test_user.balance) == float(initial_balance) + 300.00
 
 
 def test_sell_more_than_owned(db, test_user, test_stock):

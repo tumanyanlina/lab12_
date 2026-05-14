@@ -6,7 +6,7 @@ from app.database import get_db
 from app.schemas import TransactionCreate, TransactionResponse
 from app.auth import get_current_user
 from app.models import User
-from app.crud import purchase_stock, sell_stock, get_transaction_history
+from app.crud import purchase_stock, sell_stock as sell_stock_crud, get_transaction_history
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -55,11 +55,11 @@ def sell_stock(
         raise HTTPException(status_code=400, detail="Invalid transaction type. Use 'SELL'")
 
     try:
-        transaction = sell_stock(
-            db=db,
-            user_id=current_user.id,
-            stock_symbol=transaction_data.stock_symbol,
-            quantity=transaction_data.quantity
+        transaction = sell_stock_crud(
+            db, 
+            current_user.id, 
+            transaction_data.stock_symbol, 
+            transaction_data.quantity
         )
         return _format_transaction_response(transaction)
     except ValueError as e:

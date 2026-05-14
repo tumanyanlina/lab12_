@@ -31,8 +31,8 @@ def update_portfolio_after_buy(
     portfolio_item = get_portfolio_item(db, user_id, stock_id)
 
     if portfolio_item:
-        total_cost = portfolio_item.quantity * portfolio_item.average_buy_price + quantity * price_per_share
-        new_quantity = portfolio_item.quantity + quantity
+        total_cost = float(portfolio_item.quantity) * float(portfolio_item.average_buy_price) + float(quantity) * float(price_per_share)
+        new_quantity = float(portfolio_item.quantity) + float(quantity)
         portfolio_item.average_buy_price = total_cost / new_quantity
         portfolio_item.quantity = new_quantity
     else:
@@ -56,12 +56,13 @@ def update_portfolio_after_sell(
 ) -> Portfolio:
     portfolio_item = get_portfolio_item(db, user_id, stock_id)
 
-    if not portfolio_item or portfolio_item.quantity < quantity:
-        raise ValueError(f"Not enough shares. Available: {portfolio_item.quantity if portfolio_item else 0}")
+    if not portfolio_item or float(portfolio_item.quantity) < quantity:
+        available = float(portfolio_item.quantity) if portfolio_item else 0
+        raise ValueError(f"Not enough shares. Available: {available}")
 
-    portfolio_item.quantity -= quantity
+    portfolio_item.quantity = float(portfolio_item.quantity) - quantity
 
-    if portfolio_item.quantity == 0:
+    if float(portfolio_item.quantity) == 0:
         db.delete(portfolio_item)
 
     db.flush()
@@ -74,6 +75,9 @@ def purchase_stock(
     stock_symbol: str,
     quantity: float
 ) -> Transaction:
+    if quantity <= 0:
+        raise ValueError("Quantity must be positive")
+    
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise ValueError("User not found")
@@ -84,21 +88,21 @@ def purchase_stock(
     
     stock.last_updated = datetime.utcnow()
 
-    total_amount = quantity * stock.current_price
+    total_amount = float(quantity) * float(stock.current_price)
 
-    if user.balance < total_amount:
-        raise ValueError(f"Insufficient funds. Need ${total_amount:.2f}, available ${user.balance:.2f}")
+    if float(user.balance) < total_amount:
+        raise ValueError(f"Insufficient funds. Need ${total_amount:.2f}, available ${float(user.balance):.2f}")
 
     try:
-        user.balance -= total_amount
-        update_portfolio_after_buy(db, user_id, stock.id, quantity, stock.current_price)
+        user.balance = float(user.balance) - total_amount
+        update_portfolio_after_buy(db, user_id, stock.id, quantity, float(stock.current_price))
 
         transaction = Transaction(
             user_id=user_id,
             stock_id=stock.id,
             type=TransactionType.BUY,
             quantity=quantity,
-            price_per_share=stock.current_price,
+            price_per_share=float(stock.current_price),
             total_amount=total_amount
         )
         db.add(transaction)
@@ -110,12 +114,16 @@ def purchase_stock(
         db.rollback()
         raise ValueError(f"Transaction failed: {str(e)}")
 
+
 def sell_stock(
     db: Session,
     user_id: int,
     stock_symbol: str,
     quantity: float
 ) -> Transaction:
+    if quantity <= 0:
+        raise ValueError("Quantity must be positive")
+    
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise ValueError("User not found")
@@ -127,14 +135,14 @@ def sell_stock(
     stock.last_updated = datetime.utcnow()
 
     portfolio_item = get_portfolio_item(db, user_id, stock.id)
-    if not portfolio_item or portfolio_item.quantity < quantity:
-        available = portfolio_item.quantity if portfolio_item else 0
+    if not portfolio_item or float(portfolio_item.quantity) < quantity:
+        available = float(portfolio_item.quantity) if portfolio_item else 0
         raise ValueError(f"Not enough shares. Available: {available}")
 
-    total_amount = quantity * stock.current_price
+    total_amount = float(quantity) * float(stock.current_price)
 
     try:
-        user.balance += total_amount
+        user.balance = float(user.balance) + total_amount
         update_portfolio_after_sell(db, user_id, stock.id, quantity)
 
         transaction = Transaction(
@@ -142,7 +150,7 @@ def sell_stock(
             stock_id=stock.id,
             type=TransactionType.SELL,
             quantity=quantity,
-            price_per_share=stock.current_price,
+            price_per_share=float(stock.current_price),
             total_amount=total_amount
         )
         db.add(transaction)
