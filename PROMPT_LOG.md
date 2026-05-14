@@ -99,3 +99,64 @@ pytest==8.3.4
 pytest-cov==6.0.0
 python-dotenv==1.0.1
 
+Промпт №1.2 (конфигурация базы данных)
+
+Дата: 2026-05-14
+Цель: Настроить подключение к базе данных SQLAlchemy с поддержкой SQLite (для разработки) и PostgreSQL (для продакшена), создать dependency-функцию get_db() для внедрения сессий в эндпоинты FastAP
+
+Промпт: Ты — senior Python разработчик. Создай файл app/database.py для FastAPI приложения.
+
+Требования:
+1. Настройка SQLAlchemy с поддержкой SQLite (для разработки)
+2. Функция get_db() для получения сессии БД (dependency injection)
+3. Использование python-dotenv для переменных окружения
+4. Поддержка PostgreSQL через DATABASE_URL (можно переключить)
+5. Type hints, docstrings
+
+Результат: Создан файл database.py со всеми требованиями.
+
+database.py:
+
+import os
+from typing import Generator
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./trading.db")
+
+connect_args = {}
+if "sqlite" in DATABASE_URL:
+    connect_args = {"check_same_thread": False}
+
+engine = create_engine(
+    DATABASE_URL,
+    connect_args=connect_args,
+    echo=False 
+)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+Base = declarative_base()
+
+
+def get_db() -> Generator[Session, None, None]:
+    """
+    Dependency-функция для получения сессии базы данных.
+    Используется в эндпоинтах FastAPI.
+
+    Пример:
+        @app.get("/users")
+        def get_users(db: Session = Depends(get_db)):
+            return db.query(User).all()
+
+    Yields:
+        Session: Сессия SQLAlchemy
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
