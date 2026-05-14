@@ -1224,3 +1224,24 @@ quantity = float(item.quantity)
 "quantity": float(t.quantity),
 "price_per_share": float(t.price_per_share),
 "total_amount": float(t.total_amount),
+
+Проблема №6: Отсутствие проверки на отрицательное число в в crud.py.
+
+Где: app/crud.py, функции purchase_stock и sell_stock
+
+Что сгенерировал ИИ: Ничего (нет проверки)
+
+В чём проблема: Можно передать отрицательное количество, что нарушит логику.
+
+Как исправила: Добавила `if quantity <= 0: raise ValueError("Quantity must be positive")`
+
+Исправленный код:
+python:
+
+# В purchase_stock
+if quantity <= 0:
+    raise ValueError("Quantity must be positive")
+
+# В sell_stock  
+if quantity <= 0:
+    raise ValueError("Quantity must be positive")

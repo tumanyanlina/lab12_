@@ -110,7 +110,6 @@ def purchase_stock(
         db.rollback()
         raise ValueError(f"Transaction failed: {str(e)}")
 
-
 def sell_stock(
     db: Session,
     user_id: int,
