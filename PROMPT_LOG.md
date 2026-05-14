@@ -1053,7 +1053,7 @@ def health_check():
 Что сгенерировал ИИ:
 python:
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
-Проблема: Если разработчик забудет создать .env, будет использоваться предсказуемый ключ.
+
 В чём проблема: Если разработчик забудет создать .env файл, будет использоваться предсказуемый ключ, что опасно для продакшена.
 
 Как исправила:
@@ -1078,6 +1078,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 Что сгенерировал ИИ:
 python:
 allow_origins=["*"]
+
 В чём проблема: Разрешает запросы с любых сайтов, что опасно для продакшена.
 
 Как исправила:
@@ -1104,6 +1105,7 @@ python:
 portfolio_items = db.query(Portfolio).filter(...).all()
 for item in portfolio_items:
     stock = item.stock  # дополнительный запрос для каждой позиции
+
 В чём проблема: При 10 акциях в портфеле — 11 запросов к БД.
 
 Как исправила: Использовала joinedload для подгрузки связанных акций одним запросом.
@@ -1148,3 +1150,36 @@ def get_portfolio_summary(db: Session, user_id: int) -> PortfolioResponse:
         total_value=total_value,
         total_profit_loss=total_profit_loss
     )
+
+Проблема №4: Использование Float для денежных значений (потеря точности)
+
+Где: app/models.py (поля balance, current_price, quantity, average_buy_price, price_per_share, total_amount)
+
+Что сгенерировал ИИ:
+python:
+
+balance = Column(Float, default=100000.0)
+current_price = Column(Float, nullable=False, default=0.0)
+quantity = Column(Float, nullable=False, default=0.0)
+average_buy_price = Column(Float, nullable=False, default=0.0)
+price_per_share = Column(Float, nullable=False)
+total_amount = Column(Float, nullable=False)
+
+В чём проблема:
+1. Float — неточный тип для хранения денег
+2. Может давать ошибки округления (например, 0.1 + 0.2 = 0.30000000000000004)
+3. Для финансовых операций критична точность до копейки
+
+Как исправила:
+Заменила Float на Numeric(20, 2) — точное хранение чисел с фиксированной точностью (20 цифр всего, 2 после запятой)
+
+Исправленный код:
+python:
+balance = Column(Numeric(20, 2), default=100000.00)
+current_price = Column(Numeric(20, 2), nullable=False, default=0.00)
+quantity = Column(Numeric(20, 2), nullable=False, default=0.00)
+average_buy_price = Column(Numeric(20, 2), nullable=False, default=0.00)
+price_per_share = Column(Numeric(20, 2), nullable=False)
+total_amount = Column(Numeric(20, 2), nullable=False)
+
+Дополнительно: Добавлен импорт Numeric: from sqlalchemy import Numeric
