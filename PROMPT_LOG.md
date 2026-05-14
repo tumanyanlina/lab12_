@@ -716,3 +716,216 @@ def get_transaction_history(
         })
 
     return result
+
+Промпт №1.7 (роутеры API)
+
+Дата: 2026-05-14
+Цель: Создать API эндпоинты для аутентификации, работы с акциями, портфелем и транзакциями.
+
+Промпт: Создай 4 файла роутеров в папке app/routers/:
+
+1. auth.py: POST /auth/register (UserCreate -> UserResponse), POST /auth/login (UserLogin -> Token)
+2. stocks.py: GET /stocks (список всех акций), GET /stocks/{symbol} (одна акция)
+3. portfolio.py: GET /portfolio (портфель текущего пользователя)
+4. transactions.py: POST /transactions/buy (TransactionCreate -> TransactionResponse), POST /transactions/sell (TransactionCreate -> TransactionResponse), GET /transactions (история с пагинацией)
+
+Требования:
+1. Все эндпоинты кроме register/login требуют get_current_user
+2. Использовать HTTPException с правильными статусами
+3. Чистый код, type hints, docstrings
+
+Результат: Созданы все 4 файла с нужными требованиями.
+
+app/routers/auth.py:
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from datetime import timedelta
+
+from app.database import get_db
+from app.schemas import UserCreate, UserLogin, Token, UserResponse
+from app.models import User
+from app.auth import get_password_hash, authenticate_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+
+router = APIRouter(prefix="/auth", tags=["authentication"])
+
+
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def register(user_data: UserCreate, db: Session = Depends(get_db)):
+    existing_user = db.query(User).filter(
+        (User.email == user_data.email) | (User.username == user_data.username)
+    ).first()
+
+    if existing_user:
+        if existing_user.email == user_data.email:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        else:
+            raise HTTPException(status_code=400, detail="Username already taken")
+
+    hashed_password = get_password_hash(user_data.password)
+    new_user = User(
+        email=user_data.email,
+        username=user_data.username,
+        hashed_password=hashed_password,
+        balance=100000.0
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+
+@router.post("/login", response_model=Token)
+def login(user_data: UserLogin, db: Session = Depends(get_db)):
+    user = authenticate_user(db, user_data.username, user_data.password)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(data={"sub": str(user.id)}, expires_delta=access_token_expires)
+    return {"access_token": access_token, "token_type": "bearer"}
+
+app/routers/stocks.py:
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from typing import List
+
+from app.database import get_db
+from app.models import Stock, User
+from app.schemas import StockResponse
+from app.auth import get_current_user
+
+router = APIRouter(prefix="/stocks", tags=["stocks"])
+
+
+@router.get("/", response_model=List[StockResponse])
+def get_all_stocks(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    stocks = db.query(Stock).all()
+    return stocks
+
+
+@router.get("/{symbol}", response_model=StockResponse)
+def get_stock_by_symbol(
+    symbol: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    stock = db.query(Stock).filter(Stock.symbol == symbol.upper()).first()
+    if not stock:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Stock {symbol} not found")
+    return stock
+
+app/routers/portfolio.py:
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.schemas import PortfolioResponse
+from app.auth import get_current_user
+from app.models import User
+from app.crud import get_portfolio_summary
+
+router = APIRouter(prefix="/portfolio", tags=["portfolio"])
+
+
+@router.get("/", response_model=PortfolioResponse)
+def get_portfolio(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return get_portfolio_summary(db, current_user.id)
+
+app/routers/transactions.py:
+
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.orm import Session
+from typing import List
+
+from app.database import get_db
+from app.schemas import TransactionCreate, TransactionResponse
+from app.auth import get_current_user
+from app.models import User
+from app.crud import purchase_stock, sell_stock, get_transaction_history
+
+router = APIRouter(prefix="/transactions", tags=["transactions"])
+
+
+@router.post("/buy", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
+def buy_stock(
+    transaction_data: TransactionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if transaction_data.type != "BUY":
+        raise HTTPException(status_code=400, detail="Invalid transaction type. Use 'BUY'")
+
+    try:
+        transaction = purchase_stock(
+            db=db,
+            user_id=current_user.id,
+            stock_symbol=transaction_data.stock_symbol,
+            quantity=transaction_data.quantity
+        )
+        return {
+            "id": transaction.id,
+            "stock_symbol": transaction.stock.symbol,
+            "stock_name": transaction.stock.name,
+            "type": transaction.type.value,
+            "quantity": transaction.quantity,
+            "price_per_share": transaction.price_per_share,
+            "total_amount": transaction.total_amount,
+            "created_at": transaction.created_at
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/sell", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
+def sell_stock(
+    transaction_data: TransactionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if transaction_data.type != "SELL":
+        raise HTTPException(status_code=400, detail="Invalid transaction type. Use 'SELL'")
+
+    try:
+        transaction = sell_stock(
+            db=db,
+            user_id=current_user.id,
+            stock_symbol=transaction_data.stock_symbol,
+            quantity=transaction_data.quantity
+        )
+        return {
+            "id": transaction.id,
+            "stock_symbol": transaction.stock.symbol,
+            "stock_name": transaction.stock.name,
+            "type": transaction.type.value,
+            "quantity": transaction.quantity,
+            "price_per_share": transaction.price_per_share,
+            "total_amount": transaction.total_amount,
+            "created_at": transaction.created_at
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/", response_model=List[TransactionResponse])
+def get_transactions(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return get_transaction_history(db, current_user.id, limit, offset)
