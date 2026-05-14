@@ -1788,3 +1788,27 @@ def test_get_portfolio_after_sell(client, auth_headers, test_stock):
     assert len(data["items"]) == 1
     item = data["items"][0]
     assert item["quantity"] == 7
+
+7.7. Файл test_crud.py
+
+Дата: 2026-05-14
+Цель: Создать прямые тесты для бизнес-логики (без API)
+Инструмент: DeepSeek
+
+Промпт: Создай файл tests/test_crud.py для pytest.
+
+Требования:
+
+1. test_get_stock_by_symbol_success — поиск акции по символу
+2. test_get_stock_by_symbol_not_found — акция не найдена
+3. test_purchase_stock_success — успешная покупка
+4. test_purchase_stock_insufficient_funds — недостаточно средств
+5. test_purchase_stock_not_found — акция не найдена
+6. test_purchase_stock_negative_quantity — отрицательное количество
+7. test_sell_stock_success — успешная продажа
+8. test_sell_more_than_owned — продажа больше чем есть
+9. test_sell_stock_negative_quantity — отрицательное количество
+10. test_get_portfolio_summary — получение сводки портфеля
+11. test_get_transaction_history — получение истории транзакций
+
+Используй фикстуры db, test_user, test_stock.
