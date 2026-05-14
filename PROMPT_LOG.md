@@ -1295,7 +1295,8 @@ return _format_transaction_response(transaction)
 4. Фикстура test_stock — создаёт тестовую акцию
 5. Фикстура auth_token — получает JWT токен для тестового пользователя
 6. Фикстура auth_headers — заголовки с токеном
-7. Используй override для get_db зависимости.
+
+Используй override для get_db зависимости.
 
 conftest.py:
 
@@ -1400,7 +1401,8 @@ def auth_headers(auth_token):
 Требования:
 1. Тест test_health_endpoint — проверяет GET /health (статус 200, поле status)
 2. Тест test_root_endpoint — проверяет GET / (статус 200, наличие app_name, version)
-3. Используй TestClient из fastapi.testclient.
+
+Используй TestClient из fastapi.testclient.
 
 test_health.py:
 
@@ -1442,7 +1444,8 @@ def test_root_endpoint():
 6. test_login_success — успешный логин (200, токен получен)
 7. test_login_wrong_password — неверный пароль (401)
 8. test_login_nonexistent_user — несуществующий пользователь (401)
-9. Используй фикстуры client и test_user из conftest.py.
+
+Используй фикстуры client и test_user из conftest.py.
 
 test_auth.py:
 
@@ -1541,7 +1544,8 @@ def test_login_nonexistent_user(client):
 2. test_get_stocks_success — успешное получение списка акций (200)
 3. test_get_stock_by_symbol_success — успешное получение акции по символу (200)
 4. test_get_stock_by_symbol_not_found — несуществующий символ возвращает 404
-5. Используй фикстуры client, auth_headers, test_stock.
+
+Используй фикстуры client, auth_headers, test_stock.
 
 test_stocks.py:
 
@@ -1574,3 +1578,21 @@ def test_get_stock_by_symbol_success(client, auth_headers, test_stock):
 def test_get_stock_by_symbol_not_found(client, auth_headers):
     response = client.get("/stocks/NONEXISTENT", headers=auth_headers)
     assert response.status_code == 404
+
+7.5. Файл test_transactions.py:
+
+Создай файл tests/test_transactions.py для pytest.
+
+Требования:
+
+1. test_buy_stock_unauthorized — покупка без токена возвращает 401
+2. test_buy_stock_success — успешная покупка акций (201)
+3. test_buy_stock_wrong_type — неверный тип транзакции (400)
+4. test_buy_stock_insufficient_funds — недостаточно средств (400)
+5. test_buy_stock_zero_quantity — нулевое количество (422)
+6. test_buy_stock_negative_quantity — отрицательное количество (422)
+7. test_sell_stock_success — успешная продажа акций (201)
+8. test_sell_more_than_owned — продажа больше чем есть (400)
+9. test_transaction_history — получение истории транзакций (200)
+
+Используй фикстуры client, auth_headers, test_stock.
