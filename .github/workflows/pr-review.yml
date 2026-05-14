@@ -10,44 +10,40 @@ jobs:
     permissions:
       pull-requests: write
       contents: read
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      - name: Get changed files
-        id: changed-files
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files list
+        id: files
         run: |
-          echo "files<<EOF" >> $GITHUB_OUTPUT
-          git diff --name-only origin/main...HEAD >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-      
+          FILES=$(git diff --name-only origin/${{ github.base_ref }}...${{ github.head_ref }} | paste -s -d ', ' -)
+          echo "changed_files=$FILES" >> $GITHUB_OUTPUT
+
       - name: Create AI Review Comment
         uses: actions/github-script@v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           script: |
-            const changedFiles = `${{ steps.changed-files.outputs.files }}`;
-            
-            const reviewMessage = `## 🤖 AI Code Review
-            
-            ### Изменённые файлы:
-            \`\`\`
-            ${changedFiles || 'Нет изменений'}
-            \`\`\`
-            
-            ### Рекомендации:
-            - Проверьте код на наличие ошибок
-            - Убедитесь, что тесты проходят
-            - Проверьте безопасность
-            
-            ---
-            *Автоматический комментарий от GitHub Actions*
-            `;
-            
+            const changedFiles = `${{ steps.files.outputs.changed_files }}`;
+            const prNumber = context.issue.number;
+
+            const reviewMessage = `## AI Code Review
+
+            Changed files:
+            ${changedFiles || 'No files changed'}
+
+            Recommendations:
+            Check code style, security, error handling, performance, and tests.
+
+            Automatic comment from GitHub Actions.`;
+
             await github.rest.issues.createComment({
-              issue_number: context.issue.number,
+              issue_number: prNumber,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: reviewMessage
