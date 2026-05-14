@@ -1245,3 +1245,35 @@ if quantity <= 0:
 # В sell_stock  
 if quantity <= 0:
     raise ValueError("Quantity must be positive")
+
+Проблема №7: Дублирование кода в эндпоинтах /buy и /sell
+
+Где: app/routers/transactions.py
+
+Что сгенерировал ИИ: Одинаковый код форматирования ответа в двух местах
+
+В чём проблема: Нарушение принципа DRY, сложно поддерживать
+
+Как исправила: Вынесла форматирование в отдельную функцию _format_transaction_response
+
+Коммит: refactor(transactions): убрать дублирование кода в buy/sell
+
+Исправленный код:
+Добавлена функция-хелпер:
+
+python:
+def _format_transaction_response(transaction):
+    return {
+        "id": transaction.id,
+        "stock_symbol": transaction.stock.symbol,
+        "stock_name": transaction.stock.name,
+        "type": transaction.type.value,
+        "quantity": float(transaction.quantity),
+        "price_per_share": float(transaction.price_per_share),
+        "total_amount": float(transaction.total_amount),
+        "created_at": transaction.created_at
+    }
+В /buy и /sell дублирующий код заменён на:
+python
+return _format_transaction_response(transaction)
+Добавлено преобразование float() для Numeric типов

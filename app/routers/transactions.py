@@ -11,6 +11,19 @@ from app.crud import purchase_stock, sell_stock, get_transaction_history
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 
+def _format_transaction_response(transaction):
+    return {
+        "id": transaction.id,
+        "stock_symbol": transaction.stock.symbol,
+        "stock_name": transaction.stock.name,
+        "type": transaction.type.value,
+        "quantity": float(transaction.quantity),
+        "price_per_share": float(transaction.price_per_share),
+        "total_amount": float(transaction.total_amount),
+        "created_at": transaction.created_at
+    }
+
+
 @router.post("/buy", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
 def buy_stock(
     transaction_data: TransactionCreate,
@@ -27,16 +40,7 @@ def buy_stock(
             stock_symbol=transaction_data.stock_symbol,
             quantity=transaction_data.quantity
         )
-        return {
-            "id": transaction.id,
-            "stock_symbol": transaction.stock.symbol,
-            "stock_name": transaction.stock.name,
-            "type": transaction.type.value,
-            "quantity": transaction.quantity,
-            "price_per_share": transaction.price_per_share,
-            "total_amount": transaction.total_amount,
-            "created_at": transaction.created_at
-        }
+        return _format_transaction_response(transaction)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -57,16 +61,7 @@ def sell_stock(
             stock_symbol=transaction_data.stock_symbol,
             quantity=transaction_data.quantity
         )
-        return {
-            "id": transaction.id,
-            "stock_symbol": transaction.stock.symbol,
-            "stock_name": transaction.stock.name,
-            "type": transaction.type.value,
-            "quantity": transaction.quantity,
-            "price_per_share": transaction.price_per_share,
-            "total_amount": transaction.total_amount,
-            "created_at": transaction.created_at
-        }
+        return _format_transaction_response(transaction)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
