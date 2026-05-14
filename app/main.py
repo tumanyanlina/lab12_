@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from datetime import datetime
 import logging
-
+import os
 from app.database import engine, Base, SessionLocal
 from app.models import Stock
 from app.routers import auth, stocks, portfolio, transactions
@@ -49,9 +49,11 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1062,9 +1062,36 @@ SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 3. Добавила проверку: если ключ не задан — ошибка
 
 Исправленный код:
+python:
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     raise ValueError("SECRET_KEY must be set in .env file")
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+
+
+
+Проблема №2: CORS слишком открытый (`allow_origins=["*"]`)
+
+Где: app/main.py
+Что сгенерировал ИИ:
+python:
+allow_origins=["*"]
+В чём проблема: Разрешает запросы с любых сайтов, что опасно для продакшена.
+
+Как исправила:
+1. Добавила переменную ALLOWED_ORIGINS в .env
+2. Заменила ["*"] на чтение из переменной окружения
+
+Исправленный код:
+python:
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000").split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
