@@ -1183,3 +1183,44 @@ price_per_share = Column(Numeric(20, 2), nullable=False)
 total_amount = Column(Numeric(20, 2), nullable=False)
 
 Дополнительно: Добавлен импорт Numeric: from sqlalchemy import Numeric
+
+Проблема №5: Исправления в crud.py
+
+Где: app/crud.py
+
+Что сгенерировал ИИ:
+
+1. Отсутствовало обновление last_updated при покупке/продаже акций
+2. joinedload импортировался внутри функции, а не в начале файла
+3. Отсутствовало преобразование Numeric в float для ответов API
+
+В чём проблема:
+
+| Проблема | Последствие |
+|----------|-------------|
+| last_updated не обновлялся | Нельзя отследить время последнего изменения цены |
+| joinedload внутри функции | Нарушение стиля, лишний импорт при каждом вызове |
+| Numeric не преобразован | Pydantic может не сериализовать Decimal |
+
+Как исправила:
+
+1. Добавила stock.last_updated = datetime.utcnow() в purchase_stock и sell_stock
+2. Перенесла joinedload в импорт: from sqlalchemy.orm import joinedload
+3. Добавила преобразование float() для полей с Numeric
+
+Исправленный код:
+python:
+# Импорт
+from sqlalchemy.orm import Session, joinedload
+
+# В purchase_stock и sell_stock
+stock.last_updated = datetime.utcnow()
+
+# В get_portfolio_summary
+current_price = float(stock.current_price)
+quantity = float(item.quantity)
+
+# В get_transaction_history
+"quantity": float(t.quantity),
+"price_per_share": float(t.price_per_share),
+"total_amount": float(t.total_amount),

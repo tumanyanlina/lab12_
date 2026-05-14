@@ -1,9 +1,9 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 from typing import List, Optional
 from datetime import datetime
 import logging
-from sqlalchemy.orm import joinedload
+
 from app.models import User, Stock, Portfolio, Transaction, TransactionType
 from app.schemas import PortfolioItemResponse, PortfolioResponse
 
@@ -81,6 +81,8 @@ def purchase_stock(
     stock = get_stock_by_symbol(db, stock_symbol)
     if not stock:
         raise ValueError(f"Stock {stock_symbol} not found")
+    
+    stock.last_updated = datetime.utcnow()
 
     total_amount = quantity * stock.current_price
 
@@ -122,6 +124,8 @@ def sell_stock(
     stock = get_stock_by_symbol(db, stock_symbol)
     if not stock:
         raise ValueError(f"Stock {stock_symbol} not found")
+    
+    stock.last_updated = datetime.utcnow()
 
     portfolio_item = get_portfolio_item(db, user_id, stock.id)
     if not portfolio_item or portfolio_item.quantity < quantity:
@@ -153,9 +157,9 @@ def sell_stock(
 
 
 def get_portfolio_summary(db: Session, user_id: int) -> PortfolioResponse:
-    from sqlalchemy.orm import joinedload
-    
-    portfolio_items = db.query(Portfolio).options(joinedload(Portfolio.stock)).filter(Portfolio.user_id == user_id).all()
+    portfolio_items = db.query(Portfolio).options(
+        joinedload(Portfolio.stock)
+    ).filter(Portfolio.user_id == user_id).all()
     
     items_response = []
     total_value = 0.0
@@ -163,17 +167,20 @@ def get_portfolio_summary(db: Session, user_id: int) -> PortfolioResponse:
     
     for item in portfolio_items:
         stock = item.stock
-        current_price = stock.current_price
-        current_value = item.quantity * current_price
-        cost_basis = item.quantity * item.average_buy_price
+        current_price = float(stock.current_price)
+        quantity = float(item.quantity)
+        avg_price = float(item.average_buy_price)
+        
+        current_value = quantity * current_price
+        cost_basis = quantity * avg_price
         profit_loss = current_value - cost_basis
         profit_loss_percent = (profit_loss / cost_basis * 100) if cost_basis > 0 else 0
         
         items_response.append(PortfolioItemResponse(
             stock_symbol=stock.symbol,
             stock_name=stock.name,
-            quantity=item.quantity,
-            average_buy_price=item.average_buy_price,
+            quantity=quantity,
+            average_buy_price=avg_price,
             current_price=current_price,
             total_value=current_value,
             profit_loss=profit_loss,
@@ -209,9 +216,9 @@ def get_transaction_history(
             "stock_symbol": t.stock.symbol,
             "stock_name": t.stock.name,
             "type": t.type.value,
-            "quantity": t.quantity,
-            "price_per_share": t.price_per_share,
-            "total_amount": t.total_amount,
+            "quantity": float(t.quantity),
+            "price_per_share": float(t.price_per_share),
+            "total_amount": float(t.total_amount),
             "created_at": t.created_at
         })
 
