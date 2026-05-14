@@ -1424,3 +1424,23 @@ def test_root_endpoint():
     assert "app_name" in response.json()
     assert "version" in response.json()
     assert "endpoints" in response.json()
+
+7.3. Файл test_auth.py
+ 
+Дата: 2026-05-14
+Цель: Создать тесты для аутентификации (регистрация и логин)
+Инструмент: DeepSeek
+
+Промпт: Создай файл tests/test_auth.py для pytest.
+
+Требования:
+1. test_register_success — успешная регистрация (201)
+2. test_register_duplicate_email — ошибка при повторном email (400)
+3. test_register_duplicate_username — ошибка при повторном username (400)
+4. test_register_invalid_email — невалидный email (422)
+5. test_register_short_password — короткий пароль (422)
+6. test_login_success — успешный логин (200, токен получен)
+7. test_login_wrong_password — неверный пароль (401)
+8. test_login_nonexistent_user — несуществующий пользователь (401)
+9. Используй фикстуры client и test_user из conftest.py.
+
