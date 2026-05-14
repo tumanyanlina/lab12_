@@ -1044,3 +1044,27 @@ def root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
+Задание 2: Code Review сгенерированного кода
+
+Проблема №1: Небезопасный SECRET_KEY по умолчанию
+
+Где: app/auth.py
+Что сгенерировал ИИ:
+python:
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+Проблема: Если разработчик забудет создать .env, будет использоваться предсказуемый ключ.
+В чём проблема: Если разработчик забудет создать .env файл, будет использоваться предсказуемый ключ, что опасно для продакшена.
+
+Как исправила:
+1. Создала файл .env с переменной SECRET_KEY
+2. Удалила значение по умолчанию
+3. Добавила проверку: если ключ не задан — ошибка
+
+Исправленный код:
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY must be set in .env file")
+
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
