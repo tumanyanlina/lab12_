@@ -1444,3 +1444,133 @@ def test_root_endpoint():
 8. test_login_nonexistent_user — несуществующий пользователь (401)
 9. Используй фикстуры client и test_user из conftest.py.
 
+test_auth.py:
+
+import pytest
+
+
+def test_register_success(client):
+    response = client.post("/auth/register", json={
+        "email": "newuser@example.com",
+        "username": "newuser",
+        "password": "password123"
+    })
+    assert response.status_code == 201
+    data = response.json()
+    assert data["email"] == "newuser@example.com"
+    assert data["username"] == "newuser"
+    assert data["balance"] == 100000.0
+    assert "id" in data
+
+
+def test_register_duplicate_email(client, test_user):
+    response = client.post("/auth/register", json={
+        "email": "test@example.com",
+        "username": "anotheruser",
+        "password": "password123"
+    })
+    assert response.status_code == 400
+    assert "Email already registered" in response.text
+
+
+def test_register_duplicate_username(client, test_user):
+    response = client.post("/auth/register", json={
+        "email": "another@example.com",
+        "username": "testuser",
+        "password": "password123"
+    })
+    assert response.status_code == 400
+    assert "Username already taken" in response.text
+
+
+def test_register_invalid_email(client):
+    response = client.post("/auth/register", json={
+        "email": "invalid-email",
+        "username": "user",
+        "password": "password123"
+    })
+    assert response.status_code == 422
+
+
+def test_register_short_password(client):
+    response = client.post("/auth/register", json={
+        "email": "user@example.com",
+        "username": "user",
+        "password": "123"
+    })
+    assert response.status_code == 422
+
+
+def test_login_success(client, test_user):
+    response = client.post("/auth/login", json={
+        "username": "testuser",
+        "password": "testpass123"
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert "access_token" in data
+    assert data["token_type"] == "bearer"
+
+
+def test_login_wrong_password(client, test_user):
+    response = client.post("/auth/login", json={
+        "username": "testuser",
+        "password": "wrongpassword"
+    })
+    assert response.status_code == 401
+    assert "Incorrect username or password" in response.text
+
+
+def test_login_nonexistent_user(client):
+    response = client.post("/auth/login", json={
+        "username": "nonexistent",
+        "password": "password"
+    })
+    assert response.status_code == 401
+
+7.4. Файл test_stocks.py
+
+Дата: 2026-05-14
+Цель: Создать тесты для эндпоинтов работы с акциями
+Инструмент: DeepSeek
+
+Промпт: Создай файл tests/test_stocks.py для pytest.
+
+Требования:
+1. test_get_stocks_unauthorized — запрос без токена возвращает 401
+2. test_get_stocks_success — успешное получение списка акций (200)
+3. test_get_stock_by_symbol_success — успешное получение акции по символу (200)
+4. test_get_stock_by_symbol_not_found — несуществующий символ возвращает 404
+5. Используй фикстуры client, auth_headers, test_stock.
+
+test_stocks.py:
+
+import pytest
+
+
+def test_get_stocks_unauthorized(client):
+    response = client.get("/stocks/")
+    assert response.status_code == 401
+
+
+def test_get_stocks_success(client, auth_headers, test_stock):
+    response = client.get("/stocks/", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) >= 1
+    assert any(stock["symbol"] == "TEST" for stock in data)
+
+
+def test_get_stock_by_symbol_success(client, auth_headers, test_stock):
+    response = client.get("/stocks/TEST", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["symbol"] == "TEST"
+    assert data["name"] == "Test Stock"
+    assert data["current_price"] == 100.00
+
+
+def test_get_stock_by_symbol_not_found(client, auth_headers):
+    response = client.get("/stocks/NONEXISTENT", headers=auth_headers)
+    assert response.status_code == 404
