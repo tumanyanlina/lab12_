@@ -1095,3 +1095,56 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+Проблема №3: N+1 запрос при получении портфеля
+
+Где: app/crud.py, функция get_portfolio_summary
+Что сгенерировал ИИ:
+python:
+portfolio_items = db.query(Portfolio).filter(...).all()
+for item in portfolio_items:
+    stock = item.stock  # дополнительный запрос для каждой позиции
+В чём проблема: При 10 акциях в портфеле — 11 запросов к БД.
+
+Как исправила: Использовала joinedload для подгрузки связанных акций одним запросом.
+
+Исправленный код:
+python:
+def get_portfolio_summary(db: Session, user_id: int) -> PortfolioResponse:
+    from sqlalchemy.orm import joinedload
+    
+    portfolio_items = db.query(Portfolio).options(joinedload(Portfolio.stock)).filter(Portfolio.user_id == user_id).all()
+    
+    items_response = []
+    total_value = 0.0
+    total_cost = 0.0
+    
+    for item in portfolio_items:
+        stock = item.stock
+        current_price = stock.current_price
+        current_value = item.quantity * current_price
+        cost_basis = item.quantity * item.average_buy_price
+        profit_loss = current_value - cost_basis
+        profit_loss_percent = (profit_loss / cost_basis * 100) if cost_basis > 0 else 0
+        
+        items_response.append(PortfolioItemResponse(
+            stock_symbol=stock.symbol,
+            stock_name=stock.name,
+            quantity=item.quantity,
+            average_buy_price=item.average_buy_price,
+            current_price=current_price,
+            total_value=current_value,
+            profit_loss=profit_loss,
+            profit_loss_percent=profit_loss_percent
+        ))
+        
+        total_value += current_value
+        total_cost += cost_basis
+    
+    total_profit_loss = total_value - total_cost
+    
+    return PortfolioResponse(
+        items=items_response,
+        total_value=total_value,
+        total_profit_loss=total_profit_loss
+    )

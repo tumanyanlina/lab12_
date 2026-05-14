@@ -3,7 +3,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from typing import List, Optional
 from datetime import datetime
 import logging
-
+from sqlalchemy.orm import joinedload
 from app.models import User, Stock, Portfolio, Transaction, TransactionType
 from app.schemas import PortfolioItemResponse, PortfolioResponse
 
@@ -153,12 +153,14 @@ def sell_stock(
 
 
 def get_portfolio_summary(db: Session, user_id: int) -> PortfolioResponse:
-    portfolio_items = db.query(Portfolio).filter(Portfolio.user_id == user_id).all()
-
+    from sqlalchemy.orm import joinedload
+    
+    portfolio_items = db.query(Portfolio).options(joinedload(Portfolio.stock)).filter(Portfolio.user_id == user_id).all()
+    
     items_response = []
     total_value = 0.0
     total_cost = 0.0
-
+    
     for item in portfolio_items:
         stock = item.stock
         current_price = stock.current_price
@@ -166,7 +168,7 @@ def get_portfolio_summary(db: Session, user_id: int) -> PortfolioResponse:
         cost_basis = item.quantity * item.average_buy_price
         profit_loss = current_value - cost_basis
         profit_loss_percent = (profit_loss / cost_basis * 100) if cost_basis > 0 else 0
-
+        
         items_response.append(PortfolioItemResponse(
             stock_symbol=stock.symbol,
             stock_name=stock.name,
@@ -177,12 +179,12 @@ def get_portfolio_summary(db: Session, user_id: int) -> PortfolioResponse:
             profit_loss=profit_loss,
             profit_loss_percent=profit_loss_percent
         ))
-
+        
         total_value += current_value
         total_cost += cost_basis
-
+    
     total_profit_loss = total_value - total_cost
-
+    
     return PortfolioResponse(
         items=items_response,
         total_value=total_value,
