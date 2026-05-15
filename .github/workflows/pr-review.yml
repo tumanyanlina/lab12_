@@ -1,68 +1,111 @@
-name: PR Review with AI
+name: AI PR Review
 
 on:
   pull_request:
     types: [opened, synchronize]
 
 jobs:
-  ai-review:
+  review:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
       contents: read
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Get PR diff
-        id: diff
+      - name: Get PR info
+        id: pr
         run: |
-          DIFF=$(git diff origin/${{ github.base_ref }}...${{ github.head_ref }} | head -c 4000)
-          echo "diff_content<<EOF" >> $GITHUB_OUTPUT
-          echo "$DIFF" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          BASE_SHA=${{ github.event.pull_request.base.sha }}
+          HEAD_SHA=${{ github.event.pull_request.head.sha }}
+          echo "base_sha=$BASE_SHA" >> $GITHUB_OUTPUT
+          echo "head_sha=$HEAD_SHA" >> $GITHUB_OUTPUT
 
-      - name: AI Review using free API
-        id: ai-review
-        run: |
-          DIFF="${{ steps.diff.outputs.diff_content }}"
-          
-          RESPONSE=$(curl -s https://api.simplesummary.ai/v1/chat \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"model\": \"gpt-3.5-turbo\",
-              \"messages\": [
-                {\"role\": \"system\", \"content\": \"Ты — senior code reviewer. Проанализируй изменения в коде. Напиши на русском языке что изменилось, найди потенциальные проблемы, дай короткие рекомендации.\"},
-                {\"role\": \"user\", \"content\": \"Проанализируй эти изменения в коде: $DIFF\"}
-              ]
-            }")
-          
-          echo "review=$RESPONSE" >> $GITHUB_OUTPUT
-
-      - name: Post comment to PR
-        uses: actions/github-script@v7
+      - name: Run AI review
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          script: |
-            const reviewText = `${{ steps.ai-review.outputs.review }}`;
-            
-            const message = `## 🤖 AI Code Review
-                        
-            ### Анализ изменений:
-                        
-            ${reviewText || 'Не удалось получить анализ от ИИ. Пожалуйста, проверьте изменения вручную.'}
-                        
-            ---
-            *Автоматический анализ изменений в этом Pull Request.*
-            `;
-                        
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: message
-            });
+          HF_API_KEY: ${{ secrets.HF_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_SHA: ${{ steps.pr.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          python -c "
+import os, subprocess, requests
+
+base_sha = os.environ['BASE_SHA']
+head_sha = os.environ['HEAD_SHA']
+
+result = subprocess.run(['git', 'diff', f'{base_sha}...{head_sha}', '--stat'], capture_output=True, text=True)
+diff_stat = result.stdout[:500]
+
+result2 = subprocess.run(['git', 'diff', f'{base_sha}...{head_sha}'], capture_output=True, text=True)
+diff_full = result2.stdout[:15000]
+
+hf_token = os.environ['HF_API_KEY']
+
+prompt = f'''You are an experienced Python developer. Review this Pull Request.
+
+CHANGED FILES STAT:
+{diff_stat}
+
+DIFF:
+{diff_full}
+
+Write a code review in Russian with these sections:
+1. 📝 Описание — что изменилось
+2. ✅ Что хорошего
+3. ⚠️ Потенциальные проблемы
+4. 💡 Рекомендации
+5. 🔢 Оценка — от 1 до 10'''
+
+response = requests.post(
+    'https://router.huggingface.co/novita/v3/openai/chat/completions',
+    headers={
+        'Authorization': f'Bearer {hf_token}',
+        'Content-Type': 'application/json',
+    },
+    json={
+        'model': 'meta-llama/llama-3.1-8b-instruct',
+        'messages': [{'role': 'user', 'content': prompt}],
+        'max_tokens': 1000,
+        'temperature': 0.7,
+    },
+    timeout=60,
+)
+
+if response.status_code != 200:
+    print(f'Error: {response.status_code} — {response.text}')
+    exit(1)
+
+data = response.json()
+review_text = data['choices'][0]['message']['content']
+
+comment_body = f'''## 🤖 AI Code Review (Llama 3.1 8B)
+
+{review_text}
+
+---
+<sub>Автоматическое ревью · коммит {head_sha[:7]}</sub>'''
+
+repo = os.environ['REPO']
+pr_number = os.environ['PR_NUMBER']
+gh_token = os.environ['GH_TOKEN']
+
+resp = requests.post(
+    f'https://api.github.com/repos/{repo}/issues/{pr_number}/comments',
+    headers={
+        'Authorization': f'Bearer {gh_token}',
+        'Accept': 'application/vnd.github+json',
+    },
+    json={'body': comment_body},
+)
+
+if resp.status_code == 201:
+    print('✅ Комментарий опубликован')
+else:
+    print(f'Error: {resp.status_code} — {resp.text}')
+    exit(1)
+"
