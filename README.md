@@ -225,45 +225,48 @@ TOTAL                           425     32    92%
 
 Задание 4: Интеграция ИИ в CI/CD
 
-Цель
-Настроить автоматический GitHub Actions workflow, который при создании Pull Request оставляет комментарий с анализом изменений.
+Процесс выполнения
 
-Реализация
+При выполнении задания я столкнулась с несколькими трудностями, что привело к созданию нескольких пулл-реквестов. Вот как проходила работа:
 
-1. Создан файл workflow
+Первые попытки (без ИИ)
 
-Файл .github/workflows/pr-review.yml содержит инструкции для GitHub Actions:
+Сначала я попыталась настроить GitHub Actions workflow, который просто оставлял бы шаблонный комментарий без реального анализа кода. Я использовала простой скрипт на bash, который выводил статический текст. Workflow запускался, но комментарий был однотипным и не учитывал реальные изменения в коде. Преподаватель пояснил, что нужно использовать именно ИИ.
 
-- Запускается при создании или обновлении Pull Request
-- Получает список изменённых файлов
-- Публикует комментарий с рекомендациями по ревью
+Проблемы с внешними API
 
-2. Workflow выполняет следующие шаги:
+Я попробовала подключить API сервиса `simplesummary.ai`, но он оказался нерабочим. Затем пыталась использовать Hugging Face, но возникли сложности с аутентификацией и синтаксисом YAML. Workflow падал с ошибками, и комментарии не публиковались.
 
-| Шаг | Действие |
-|-----|----------|
-| 1 | Клонирование репозитория (`actions/checkout@v4`) |
-| 2 | Определение списка изменённых файлов через `git diff` |
-| 3 | Публикация комментария в PR через `actions/github-script@v7` |
+Ошибки синтаксиса
 
-3. Результат работы
+Много времени ушло на исправление YAML-синтаксиса. Ошибки возникали из-за многострочных строк, неправильного экранирования кавычек и некорректного использования переменных окружения. Я создала несколько пулл-реквестов, чтобы проверить разные варианты конфигурации.
 
-При создании Pull Request автоматически появляется комментарий от бота:
+Решение: Groq API
 
-![CI/CD скриншот](screenshot-cicd.png)
+В итоге я нашла оптимальный вариант — использование **Groq API** с моделью `llama-3.3-70b-versatile`. Groq предоставляет бесплатный доступ и высокую скорость ответа.
 
-В комментарии указаны:
-- Список изменённых файлов
-- Рекомендации по проверке кода (стиль, безопасность, обработка ошибок, тесты)
+Я написала Python-скрипт, который:
+- Получает diff изменений из PR
+- Отправляет его в Groq API
+- Формирует структурированный комментарий с разделами: ✅ что сделано хорошо, ⚠️ замечания, 🐛 баги, 💡 предложения
+- Публикует комментарий в PR
 
-Вывод:
+Итог
 
-Workflow успешно настроен и работает при каждом создании Pull Request. Комментарий от ИИ публикуется автоматически, что упрощает процесс код-ревью.
+После нескольких итераций workflow заработал корректно. Комментарий от ИИ теперь появляется в каждом новом PR и содержит реальный анализ кода, а не шаблонный текст.
 
-Файл workflow (`.github/workflows/pr-review.yml`)
+Результат работы
+
+При создании Pull Request автоматически запускается GitHub Actions workflow, который отправляет diff в Groq AI (модель llama-3.3-70b) и публикует ревью.
+
+![AI Review Screenshot](screenshot-ai-review.png)
+
+Файл workflow
+
+Файл `.github/workflows/pr-review.yml` содержит полную конфигурацию:
 
 ```yaml
-name: PR Review with AI
+name: AI Code Review (Groq)
 
 on:
   pull_request:
@@ -282,34 +285,40 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get changed files list
-        id: files
-        run: |
-          FILES=$(git diff --name-only origin/${{ github.base_ref }}...${{ github.head_ref }} | paste -s -d ', ' -)
-          echo "changed_files=$FILES" >> $GITHUB_OUTPUT
-
-      - name: Create AI Review Comment
-        uses: actions/github-script@v7
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install groq
+
+      - name: Get PR diff
+        run: |
+          git diff origin/${{ github.base_ref }}...HEAD > pr_diff.txt
+
+      - name: Run AI Review via Groq
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          python review.py
+
+      - name: Post comment to PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const changedFiles = `${{ steps.files.outputs.changed_files }}`;
-            const prNumber = context.issue.number;
-
-            const reviewMessage = `## AI Code Review
-
-            Changed files:
-            ${changedFiles || 'No files changed'}
-
-            Recommendations:
-            Check code style, security, error handling, performance, and tests.
-
-            Automatic comment from GitHub Actions.`;
-
+            const fs = require('fs');
+            const review = fs.readFileSync('review.txt', 'utf8');
             await github.rest.issues.createComment({
-              issue_number: prNumber,
+              issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: reviewMessage
+              body: review
             });
+
+ **Важно:** Первоначально я прикрепила неверный скриншот (со старым шаблонным комментарием). Ниже представлен актуальный скриншот с реальным анализом от ИИ.
+
+![AI Review Screenshot](screenshot-ai-review.png)
+
+*Рисунок 1 — Комментарий от ИИ (Groq, модель llama-3.3-70b-versatile) в Pull Request*
