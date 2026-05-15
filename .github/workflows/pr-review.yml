@@ -17,30 +17,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get PR diff
-        id: diff
+      - name: Get changed files
+        id: files
         run: |
-          DIFF=$(git diff origin/${{ github.base_ref }}...${{ github.head_ref }} | head -c 4000)
-          echo "diff_content<<EOF" >> $GITHUB_OUTPUT
-          echo "$DIFF" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: AI Review using free API
-        id: ai-review
-        run: |
-          DIFF="${{ steps.diff.outputs.diff_content }}"
-          
-          RESPONSE=$(curl -s https://api.simplesummary.ai/v1/chat \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"model\": \"gpt-3.5-turbo\",
-              \"messages\": [
-                {\"role\": \"system\", \"content\": \"Ты — senior code reviewer. Проанализируй изменения в коде. Напиши на русском языке что изменилось, найди потенциальные проблемы, дай короткие рекомендации.\"},
-                {\"role\": \"user\", \"content\": \"Проанализируй эти изменения в коде: $DIFF\"}
-              ]
-            }")
-          
-          echo "review=$RESPONSE" >> $GITHUB_OUTPUT
+          git fetch origin main
+          FILES=$(git diff --name-only origin/main...HEAD | paste -s -d ', ' -)
+          echo "changed_files=$FILES" >> $GITHUB_OUTPUT
 
       - name: Post comment to PR
         uses: actions/github-script@v7
@@ -48,21 +30,32 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           script: |
-            const reviewText = `${{ steps.ai-review.outputs.review }}`;
-            
-            const message = `## 🤖 AI Code Review
-                        
-            ### Анализ изменений:
-                        
-            ${reviewText || 'Не удалось получить анализ от ИИ. Пожалуйста, проверьте изменения вручную.'}
-                        
-            ---
-            *Автоматический анализ изменений в этом Pull Request.*
-            `;
-                        
+            const changedFiles = `${{ steps.files.outputs.changed_files }}`;
+            const prNumber = context.issue.number;
+            const prAuthor = context.payload.pull_request.user.login;
+
+            const comment = `## 🤖 AI Code Review
+
+**Pull Request #${prNumber}**
+**Автор:** @${prAuthor}
+
+### Изменённые файлы:
+\`\`\`
+${changedFiles || 'Не удалось определить список файлов'}
+\`\`\`
+
+### Рекомендации по проверке:
+1. Проверьте код на ошибки
+2. Убедитесь, что тесты проходят
+3. Проверьте безопасность (нет ли секретов)
+4. Нет ли дублирования кода
+
+---
+*Автоматический комментарий от GitHub Actions*`;
+
             await github.rest.issues.createComment({
-              issue_number: context.issue.number,
+              issue_number: prNumber,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: message
+              body: comment
             });
