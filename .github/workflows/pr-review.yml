@@ -17,34 +17,52 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get changed files list
-        id: files
+      - name: Get PR diff
+        id: diff
         run: |
-          FILES=$(git diff --name-only origin/${{ github.base_ref }}...${{ github.head_ref }} | paste -s -d ', ' -)
-          echo "changed_files=$FILES" >> $GITHUB_OUTPUT
+          DIFF=$(git diff origin/${{ github.base_ref }}...${{ github.head_ref }} | head -c 4000)
+          echo "diff_content<<EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Create AI Review Comment
+      - name: AI Review using free API
+        id: ai-review
+        run: |
+          DIFF="${{ steps.diff.outputs.diff_content }}"
+          
+          RESPONSE=$(curl -s https://api.simplesummary.ai/v1/chat \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"model\": \"gpt-3.5-turbo\",
+              \"messages\": [
+                {\"role\": \"system\", \"content\": \"Ты — senior code reviewer. Проанализируй изменения в коде. Напиши на русском языке что изменилось, найди потенциальные проблемы, дай короткие рекомендации.\"},
+                {\"role\": \"user\", \"content\": \"Проанализируй эти изменения в коде: $DIFF\"}
+              ]
+            }")
+          
+          echo "review=$RESPONSE" >> $GITHUB_OUTPUT
+
+      - name: Post comment to PR
         uses: actions/github-script@v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           script: |
-            const changedFiles = `${{ steps.files.outputs.changed_files }}`;
-            const prNumber = context.issue.number;
-
-            const reviewMessage = `## AI Code Review
-
-            Changed files:
-            ${changedFiles || 'No files changed'}
-
-            Recommendations:
-            Check code style, security, error handling, performance, and tests.
-
-            Automatic comment from GitHub Actions.`;
-
+            const reviewText = `${{ steps.ai-review.outputs.review }}`;
+            
+            const message = `## 🤖 AI Code Review
+                        
+            ### Анализ изменений:
+                        
+            ${reviewText || 'Не удалось получить анализ от ИИ. Пожалуйста, проверьте изменения вручную.'}
+                        
+            ---
+            *Автоматический анализ изменений в этом Pull Request.*
+            `;
+                        
             await github.rest.issues.createComment({
-              issue_number: prNumber,
+              issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: reviewMessage
+              body: message
             });
